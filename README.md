@@ -27,14 +27,12 @@ The `keyvault_sync` script is a versatile Python utility for managing secrets in
 
    ```bash
    pip install -r requirements.txt
-   ```bash
 
 ## Usage
 Synchronize Secrets
 The script provides the capability to synchronize secrets from a source Key Vault to one or more target Key Vaults. It also supports optional replacement of existing secrets.
 ```bash
 python keyvault_sync.py sync --source-keyvault SOURCE_KEYVAULT_URI --target-keyvaults TARGET_KEYVAULT_URI [TARGET_KEYVAULT_URI ...] --replace-if-exist
-```bash
 Replace SOURCE_KEYVAULT_URI with the URI of the source Key Vault and TARGET_KEYVAULT_URI with the URIs of the target Key Vaults. You can specify multiple target Key Vaults separated by space.
 
 
@@ -42,19 +40,16 @@ Replace SOURCE_KEYVAULT_URI with the URI of the source Key Vault and TARGET_KEYV
 To list the available Key Vaults in your Azure subscription:
 ```bash
 python keyvault_sync.py list-keyvaults
-```bash
 
 ## Show Differences Between Secrets
 To compare secrets between the source and target Key Vaults and display the differences:
 ```bash
 python keyvault_sync.py list-keyvaults
-```bash
 
 ## Show Differences Between Secrets
 To compare secrets between the source and target Key Vaults and display the differences:
 ```bash
 python keyvault_sync.py show-diffs --source-keyvault SOURCE_KEYVAULT_URI --target-keyvaults TARGET_KEYVAULT_URI [TARGET_KEYVAULT_URI ...]
-```bash
 
 Replace placeholders like SOURCE_KEYVAULT_URI and TARGET_KEYVAULT_URI with actual Key Vault URLs.
 
