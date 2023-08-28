@@ -3,24 +3,57 @@ from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.resource import SubscriptionClient
+from azure.mgmt.keyvault import KeyVaultManagementClient
+from azure.mgmt.resource import ResourceManagementClient
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from prettytable import PrettyTable
 import concurrent.futures
 from tqdm import tqdm
 
-def list_keyvaults():
+def process_vault(vault, subscription_id):
+    return (vault.properties.vault_uri, vault.id.split("/")[4], subscription_id)
+
+def process_subscription(subscription, specified_subs=None):
+    results = []
+    if specified_subs is not None and subscription.subscription_id not in specified_subs:
+        return results
+
+    try:
+        credential = DefaultAzureCredential()
+        keyvault_client = KeyVaultManagementClient(credential, subscription.subscription_id)
+
+        with ThreadPoolExecutor() as executor:
+            futures = {executor.submit(process_vault, vault, subscription.subscription_id): vault for vault in keyvault_client.vaults.list_by_subscription()}
+            for future in as_completed(futures):
+                results.append(future.result())
+                
+    except Exception as e:
+        print(f"Skipping due to error for Subscription ID {subscription.subscription_id}: {e}")
+
+    return results
+
+def list_keyvaults(subscription_ids=None):
     credential = DefaultAzureCredential()
-    keyvault_client = KeyVaultManagementClient(credential)
+    subscription_client = SubscriptionClient(credential)
 
     print("Listing Key Vaults accessible to you:\n")
 
-    for vault in keyvault_client.vaults.list():
-        try:
-            SecretClient(vault_url=vault.properties.vault_uri, credential=credential)
-            print(f"- {vault.properties.vault_uri}")
-        except Exception:
-            pass
+    x = PrettyTable()
+    x.field_names = ["Keyvault URI", "Resource Group", "Subscription ID"]
+    x.align = "l"  # Align columns to the left
 
-    print("\n")
+    total_subscriptions = [s for s in subscription_client.subscriptions.list()]
+    total_subscriptions_count = len(total_subscriptions)
+
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(process_subscription, subscription, subscription_ids): subscription for subscription in total_subscriptions}
+
+        for future in tqdm(as_completed(futures), total=total_subscriptions_count, desc="Processing Subscriptions"):
+            for vault_uri, resource_group, sub_id in future.result():
+                x.add_row([vault_uri, resource_group, sub_id])
+
+    print(x)
 
 def compare_secret(source_client, secret_name, target_clients):
     result = []
@@ -62,6 +95,8 @@ def main():
     parser.add_argument("--source-keyvault", required=False, help="URI of the source Key Vault")
     parser.add_argument("--target-keyvaults", nargs="+", required=False, help="URIs of the target Key Vaults")
     parser.add_argument("--replace-if-exist", action="store_true", help="Replace secrets in target Key Vaults if they already exist")
+    parser.add_argument("--subscriptions", nargs="+", required=False, help="IDs of the subscriptions to scan. If not provided, scans all accessible subscriptions.")
+    
     args = parser.parse_args()
 
     if args.command == "sync":
@@ -69,10 +104,9 @@ def main():
         target_clients = [SecretClient(vault_url=url, credential=DefaultAzureCredential()) for url in args.target_keyvaults]
         sync_secrets(source_client, target_clients, args.replace_if_exist)
     elif args.command == "list-keyvaults":
-        list_keyvaults()
+        list_keyvaults(subscription_ids=args.subscriptions)
     elif args.command == "show-diffs":
         show_diffs(args.source_keyvault, args.target_keyvaults)
-    # ... (same as before)
 
 if __name__ == "__main__":
     main()
